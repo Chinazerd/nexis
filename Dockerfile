@@ -7,18 +7,17 @@ WORKDIR /src
 # Copy package files and install dependencies
 COPY package*.json ./
 
-RUN npm install -g pnpm
 
-RUN pnpm install
+RUN npm install
 
 # Copy the entire application code
 COPY . .
 
 # Build the application
-RUN pnpm build
+RUN npm build
 
 # Expose the port your app runs on
 EXPOSE 3000
 
 # Command to start the application
-CMD ["pnpm", "start"]
+CMD ["npm", "start"]
