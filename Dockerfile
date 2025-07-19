@@ -1,33 +1,36 @@
-# 1. Base image to install dependencies
-FROM node:20-alpine AS deps
+# ----------- 1. Builder Stage -------------
+FROM node:20.13.1-alpine AS builder
+
+# Set working directory
 WORKDIR /app
 
 # Install pnpm globally
 RUN npm install -g pnpm
 
-# Copy only the lock and package files to install deps
-COPY package.json pnpm-lock.yaml* ./
+# Copy dependency files and install
+COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# 2. Builder stage
-FROM node:20-alpine AS builder
-WORKDIR /app
+# Copy prisma early so prisma generate won't fail
+COPY prisma ./prisma
 
-COPY --from=deps /app/node_modules ./node_modules
+# Generate Prisma Client
+RUN pnpm exec prisma generate
+
+# Copy rest of the app
 COPY . .
 
-# Copy Prisma schema before generating
+# Build the Next.js app
+RUN pnpm run build
 
-RUN pnpm prisma generate
 
-# Build the app
-RUN pnpm build
+# ----------- 2. Runner Stage -------------
+FROM node:20.13.1-alpine AS runner
 
-# 3. Final image
-FROM node:20-alpine AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
+# Set environment variable for production deployment
+ENV NODE_ENV=deployment
 
 # Copy everything needed to run the app
 COPY --from=builder /app/public ./public
@@ -37,5 +40,8 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/.env.local ./.env.local
 
+# Expose port
 EXPOSE 3000
+
+# Start the app
 CMD ["pnpm", "start"]
