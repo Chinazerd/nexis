@@ -1,23 +1,41 @@
-# Use the Node.js 20.13.1 base image
-FROM node:20.13.1
+# 1. Base image to install dependencies
+FROM node:20-alpine AS deps
+WORKDIR /app
 
-# Set the working directory inside the container
-WORKDIR /src
+# Install pnpm globally
+RUN npm install -g pnpm
 
-# Copy package files and install dependencies
-COPY package*.json ./
+# Copy only the lock and package files to install deps
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
 
+# 2. Builder stage
+FROM node:20-alpine AS builder
+WORKDIR /app
 
-RUN npm install
-
-# Copy the entire application code
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application
-RUN npm build
+# Copy Prisma schema before generating
 
-# Expose the port your app runs on
+RUN pnpm prisma generate
+
+# Build the app
+RUN pnpm build
+
+# 3. Final image
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy everything needed to run the app
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/.env.local ./.env.local
+
 EXPOSE 3000
-
-# Command to start the application
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
