@@ -1,26 +1,24 @@
 # ----------- 1. Builder Stage -------------
 FROM node:20.13.1-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install pnpm globally
+# Install pnpm
 RUN npm install -g pnpm
 
-# Copy dependency files and install
+# Copy package and lock files
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
 
-# Copy prisma early so prisma generate won't fail
+# ✅ Copy prisma folder early before install to avoid prisma generate error
 COPY prisma ./prisma
 
-# Generate Prisma Client
-RUN pnpm exec prisma generate
+# Now install dependencies
+RUN pnpm install --frozen-lockfile
 
-# Copy rest of the app
+# Copy the rest of the application code
 COPY . .
 
-# Build the Next.js app
+# Build the app
 RUN pnpm run build
 
 
@@ -40,8 +38,6 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/.env.local ./.env.local
 
-# Expose port
 EXPOSE 3000
 
-# Start the app
 CMD ["pnpm", "start"]
